@@ -1,0 +1,78 @@
+import hashlib
+
+# Base58 Alphabet untuk decode manual
+BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+
+def base58_decode(s):
+    # Hitung leading zero (karakter '1' di awal)
+    leading_zeros = len(s) - len(s.lstrip('1'))
+    s = s.lstrip('1')
+    
+    # Konversi base58 ke angka
+    num = 0
+    for char in s:
+        num = num * 58 + BASE58_ALPHABET.index(char)
+    
+    # Konversi angka ke bytes
+    byte_length = (num.bit_length() + 7) // 8
+    result = num.to_bytes(byte_length, 'big')
+    
+    return b'\x00' * leading_zeros + result
+
+def wif_to_hex(wif):
+    try:
+        decoded = base58_decode(wif)
+    except Exception:
+        raise ValueError("❌ WIF tidak valid: gagal decode Base58")
+
+    if len(decoded) < 4:
+        raise ValueError("❌ WIF terlalu pendek")
+
+    payload = decoded[:-4]
+    checksum = decoded[-4:]
+
+    # Verifikasi checksum
+    if hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] != checksum:
+        raise ValueError("❌ Checksum tidak cocok! WIF rusak atau salah.")
+
+    # Cek versi (0x80 = mainnet Bitcoin)
+    if payload[0] != 0x80:
+        raise ValueError("❌ Bukan WIF mainnet Bitcoin (harus dimulai dengan 0x80).")
+
+    # Deteksi compressed atau tidak
+    if len(payload) == 34 and payload[-1] == 0x01:
+        private_key = payload[1:-1]
+        compressed = True
+    elif len(payload) == 33:
+        private_key = payload[1:]
+        compressed = False
+    else:
+        raise ValueError(f"❌ Panjang payload tidak valid: {len(payload)} byte")
+
+    return private_key.hex(), compressed
+
+# ==============================
+# PROGRAM UTAMA
+# ==============================
+if __name__ == "__main__":
+    print("🔐 Konversi WIF ke Private Key (Hex)")
+    print("-----------------------------------")
+    
+    while True:
+        wif = input("\nMasukkan WIF (ketik 'exit' untuk keluar): ").strip()
+        
+        if wif.lower() in ('exit', 'quit', 'q'):
+            print("👋 Terima kasih! Program selesai.")
+            break
+            
+        if not wif:
+            print("⚠️  WIF tidak boleh kosong.")
+            continue
+            
+        try:
+            private_hex, is_compressed = wif_to_hex(wif)
+            print("\n✅ BERHASIL!")
+            print("Private Key (hex):", private_hex)
+            print("Compressed       :", is_compressed)
+        except Exception as e:
+            print("\n" + str(e))
